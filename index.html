@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Video Autopilot — one ASIN in, a finished listing video out</title>
+<meta name="description" content="A Claude Code skill that turns one Amazon ASIN into a finished 30-second listing video: footage, sound, music, voiceover and animated text.">
+<style>
+  :root {
+    --bg:#100e0c; --panel:#191612; --line:#2a251e; --line-soft:#221e18;
+    --cream:#F5EFE3; --dim:#a49a88; --dimmer:#7b7264; --gold:#C9A227;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body {
+    background:var(--bg); color:var(--cream); line-height:1.7;
+    font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Arial, sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  body::before {
+    content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background:radial-gradient(1100px 620px at 50% -8%, rgba(201,162,39,.10), transparent 65%);
+  }
+  .wrap { position:relative; z-index:1; max-width:940px; margin:0 auto; padding:0 24px; }
+
+  /* ---------- hero ---------- */
+  header { text-align:center; padding:96px 0 44px; }
+  .kicker { font-size:12px; font-weight:600; letter-spacing:6px; color:var(--gold); }
+  h1 {
+    font-size:clamp(44px, 8vw, 88px); font-weight:200; letter-spacing:-.5px;
+    line-height:1.02; margin:22px 0 0;
+  }
+  h1 b { font-weight:700; }
+  .lede {
+    font-size:clamp(17px, 2.2vw, 21px); color:var(--dim); font-weight:300;
+    max-width:600px; margin:26px auto 0;
+  }
+  .lede b { color:var(--cream); font-weight:500; }
+
+  /* ---------- video ---------- */
+  .player { margin:44px 0 12px; border-radius:16px; overflow:hidden;
+            border:1px solid var(--line); background:#000;
+            box-shadow:0 34px 90px rgba(0,0,0,.6); }
+  .player video { display:block; width:100%; height:auto; }
+  .caption { text-align:center; font-size:13.5px; color:var(--dimmer);
+             letter-spacing:.4px; margin-bottom:14px; }
+
+  /* ---------- sections ---------- */
+  section { padding:66px 0 0; }
+  h2 { font-size:12px; font-weight:700; letter-spacing:5px; color:var(--gold);
+       margin-bottom:26px; }
+  h3 { font-size:19px; font-weight:600; margin-bottom:6px; letter-spacing:-.2px; }
+  p { color:var(--dim); font-weight:300; margin-bottom:14px; }
+  p strong, td strong { color:var(--cream); font-weight:500; }
+  .hr { height:1px; background:var(--line-soft); margin-top:66px; }
+
+  /* ---------- pieces ---------- */
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .card { background:var(--panel); border:1px solid var(--line);
+          border-radius:14px; padding:24px 26px; }
+  .card h3 { margin-top:0; }
+  .card p:last-child { margin-bottom:0; }
+  .need { display:flex; gap:16px; align-items:flex-start; padding:18px 0;
+          border-bottom:1px solid var(--line-soft); }
+  .need:last-child { border-bottom:0; }
+  .need .n { font-size:26px; font-weight:200; color:var(--gold); line-height:1.2;
+             min-width:34px; }
+  .need p { margin:0; font-size:15.5px; }
+
+  table { width:100%; border-collapse:collapse; font-size:15px; font-weight:300; }
+  td { padding:13px 0; border-bottom:1px solid var(--line-soft); color:var(--dim);
+       vertical-align:top; }
+  tr:last-child td { border-bottom:0; }
+  td.price { text-align:right; white-space:nowrap; color:var(--cream);
+             font-variant-numeric:tabular-nums; }
+  td.step-name { color:var(--cream); font-weight:500; width:150px; }
+
+  .steps { counter-reset:s; }
+  .step { position:relative; padding-left:58px; padding-bottom:34px; }
+  .step:last-child { padding-bottom:0; }
+  .step::before {
+    counter-increment:s; content:counter(s);
+    position:absolute; left:0; top:-2px; width:36px; height:36px;
+    border:1px solid rgba(201,162,39,.5); border-radius:50%; color:var(--gold);
+    display:flex; align-items:center; justify-content:center;
+    font-size:16px; font-weight:300;
+  }
+  .step::after {
+    content:""; position:absolute; left:18px; top:40px; bottom:6px; width:1px;
+    background:var(--line-soft);
+  }
+  .step:last-child::after { display:none; }
+  .step h3 { margin-bottom:4px; }
+  .step p { font-size:15.5px; }
+
+  pre {
+    position:relative; background:#0a0908; border:1px solid var(--line);
+    border-radius:10px; padding:15px 84px 15px 17px; margin:12px 0 4px;
+    font-family:ui-monospace, Menlo, monospace; font-size:13px; line-height:1.6;
+    color:#e6ddca; overflow-x:auto; white-space:pre-wrap; word-break:break-word;
+  }
+  .copy {
+    position:absolute; top:10px; right:10px; background:transparent;
+    color:var(--dimmer); border:1px solid var(--line); border-radius:6px;
+    padding:4px 12px; font-size:11.5px; letter-spacing:1px; cursor:pointer;
+    transition:.15s;
+  }
+  .copy:hover { color:var(--gold); border-color:rgba(201,162,39,.5); }
+
+  .cta {
+    text-align:center; background:var(--panel); border:1px solid var(--line);
+    border-radius:16px; padding:44px 32px;
+  }
+  .cta h3 { font-size:26px; font-weight:200; margin-bottom:12px; }
+  .cta h3 b { font-weight:600; }
+  .cta p { max-width:520px; margin:0 auto 24px; }
+  .btn {
+    display:inline-block; background:var(--gold); color:#100e0c; text-decoration:none;
+    font-weight:600; font-size:15px; letter-spacing:.6px; padding:15px 34px;
+    border-radius:9px; transition:.15s;
+  }
+  .btn:hover { filter:brightness(1.1); }
+
+  footer { text-align:center; padding:70px 0 60px; color:#5f584c;
+           font-size:12px; letter-spacing:3px; }
+
+  @media (max-width:640px) {
+    header { padding:64px 0 32px; }
+    .two { grid-template-columns:1fr; }
+    table tr { display:block; padding:12px 0; border-bottom:1px solid var(--line-soft); }
+    table td { border:0; padding:2px 0; display:block; }
+    td.step-name { width:auto; }
+    td.price { text-align:left; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">CLAUDE CODE SKILL</div>
+  <h1>Video <b>Autopilot</b></h1>
+  <p class="lede">One Amazon ASIN in. A finished 30-second listing video out:
+  footage, sound design, music, voiceover and animated text.
+  <b>No questions during the run.</b></p>
+</header>
+
+<div class="player">
+  <video src="assets/demo.mp4" poster="assets/poster.jpg" controls playsinline preload="metadata"></video>
+</div>
+<p class="caption">Made start to finish by the skill. One ASIN, no human edits.</p>
+
+<div class="hr"></div>
+
+<section>
+  <h2>WHAT YOU NEED</h2>
+  <div class="need">
+    <div class="n">1</div>
+    <p><strong>Claude Code.</strong> The desktop app or the CLI, either works.</p>
+  </div>
+  <div class="need">
+    <div class="n">2</div>
+    <p><strong>A Genrupt account with credits.</strong> That is what renders the video
+    and generates the music and voiceover. A small credit pack covers your first
+    videos.</p>
+  </div>
+  <p style="margin-top:22px; font-size:15px;">That is your whole list. The skill also
+  uses a few free tools on your computer for editing and quality checks. You do not
+  install them by hand: Claude does it for you in step one below.</p>
+</section>
+
+<div class="hr"></div>
+
+<section>
+  <h2>SETUP, ONE TIME</h2>
+  <div class="steps">
+
+    <div class="step">
+      <h3>Let Claude prepare your machine</h3>
+      <p>Open Claude Code and paste this:</p>
+      <pre><button class="copy">COPY</button>Check whether ffmpeg, node, python3 with pillow and numpy, and whisper-cpp with a base.en model are installed on this machine. Install anything that is missing, then confirm each one works.</pre>
+      <p style="margin-top:10px">It checks, installs what is missing, and tells you when
+      it is done.</p>
+    </div>
+
+    <div class="step">
+      <h3>Connect Genrupt</h3>
+      <p>Create your account at <strong>genrupt.com</strong> and add credits. Then
+      connect Genrupt to Claude from Genrupt's own settings, under integrations. That
+      link is what lets the skill render on your behalf.</p>
+    </div>
+
+    <div class="step">
+      <h3>Install the skill</h3>
+      <p>Send me your GitHub username, accept the invite that arrives by email, then
+      run:</p>
+      <pre><button class="copy">COPY</button>npx skills add JayGPTPro/asin-to-video-autopilot -g</pre>
+      <p style="margin-top:10px">If it asks you to sign in to GitHub, say yes.</p>
+    </div>
+
+    <div class="step">
+      <h3>Confirm you are ready</h3>
+      <p>In Claude Code:</p>
+      <pre><button class="copy">COPY</button>Run the asin-to-video-autopilot environment check</pre>
+      <p style="margin-top:10px">One line per requirement. Anything not ready comes with
+      its exact fix, and you can just tell Claude to handle it.</p>
+    </div>
+
+    <div class="step">
+      <h3>Make your first video</h3>
+      <pre><button class="copy">COPY</button>/asin-to-video-autopilot B0XXXXXXXXX</pre>
+      <p style="margin-top:10px">The first run asks one question, once: your spending
+      limit per video. After that it works on its own and reports each cost as it
+      happens. Fifteen to twenty-five minutes later the video is done.</p>
+    </div>
+
+  </div>
+</section>
+
+<div class="hr"></div>
+
+<section>
+  <h2>WHAT HAPPENS IN A RUN</h2>
+  <table>
+    <tr><td class="step-name">Research</td><td>Reads your listing and studies every image, and screens out the ones AI providers reject</td><td class="price">free</td></tr>
+    <tr><td class="step-name">Direction</td><td>Writes the film: hook, hero shot, four use cases, a close that answers the opening</td><td class="price">free</td></tr>
+    <tr><td class="step-name">Test shot</td><td>Renders four seconds of the riskiest shot first and measures it</td><td class="price">$0.55</td></tr>
+    <tr><td class="step-name">The film</td><td>The full 27 seconds with its own sound effects</td><td class="price">$7-9</td></tr>
+    <tr><td class="step-name">Self-check</td><td>Measures every shot against the plan and repairs one flaw on its own if needed</td><td class="price">$0-1.50</td></tr>
+    <tr><td class="step-name">Audio</td><td>Music options and a scripted voiceover, mixed under the film's own sound</td><td class="price">~$0.50</td></tr>
+    <tr><td class="step-name">Finish</td><td>Animated text, final checks, and a report of every decision it made</td><td class="price">free</td></tr>
+  </table>
+  <p style="margin-top:22px; font-size:15px;"><strong>About $9 to $12 per video.</strong>
+  Your spending limit is enforced by the skill itself: it stops before crossing it, and
+  every price is read live from your own Genrupt account before anything runs.</p>
+</section>
+
+<div class="hr"></div>
+
+<section>
+  <h2>GOOD TO KNOW</h2>
+  <div class="two">
+    <div class="card">
+      <h3>Your product stays your product</h3>
+      <p>The render is locked to clean plates cut from your own listing images. No
+      invented claims, no generated text in the frame, and never a fake logo: your real
+      label or nothing.</p>
+    </div>
+    <div class="card">
+      <h3>It checks its own work</h3>
+      <p>Every shot is measured against the plan for light, movement and continuity.
+      That is how it catches the flaws that usually make AI video look like AI video.</p>
+    </div>
+    <div class="card">
+      <h3>People in the frame</h3>
+      <p>Faces appear in the film, generated to match your product's buyer. Your own
+      listing photos of people are screened out first, since the providers reject
+      them.</p>
+    </div>
+    <div class="card">
+      <h3>Format</h3>
+      <p>1280x720 widescreen, 27 to 30 seconds, English voiceover. The Amazon listing
+      and Sponsored Brands format. Vertical cuts come later.</p>
+    </div>
+  </div>
+</section>
+
+<div class="hr"></div>
+
+<section>
+  <div class="cta">
+    <h3>Want to build <b>your own</b> AI employee?</h3>
+    <p>This skill is one AI employee doing one job. It was built the way I teach it:
+    give the machine your taste in writing, make it measure its own work, then let it
+    run. That is the Wonka Creative Bootcamp, ten days, and you leave with your own,
+    built around your product and your standards.</p>
+    <a class="btn" href="https://jaygptpro.com/wonka">See the bootcamp</a>
+  </div>
+</section>
+
+<footer>JAY GPT PRO</footer>
+</div>
+
+<script>
+document.querySelectorAll('.copy').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const code = btn.parentElement.textContent.replace(/^COPY/, '').trim();
+    navigator.clipboard.writeText(code).then(() => {
+      btn.textContent = 'COPIED';
+      setTimeout(() => btn.textContent = 'COPY', 1500);
+    });
+  });
+});
+</script>
+</body>
+</html>
